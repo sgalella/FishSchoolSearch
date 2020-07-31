@@ -15,7 +15,17 @@ W_SCALE = 10
 MAX_ITER = 50
 
 
-def random_contour(x, y):
+def get_lanscape_cost(x, y):
+    """
+    Generates a random landscape.
+
+    Args:
+        x (np.array): Meshgrid for x coordinate.
+        y (np.array): Meshgrid for y coordinate.
+
+    Returns:
+        np.array: Array with costs for each coordinate.
+    """
     # return x ** 2 + y ** 2  # Sphere
     # return 1 + (x ** 2 / 4000) + (y ** 2 / 4000) - np.cos(x / np.sqrt(2)) - np.cos(y / np.sqrt(2))  # Gricwank
     # return (x ** 2 + y - 11) ** 2 + (x + y ** 2 - 7) ** 2  # Himmelblau
@@ -23,21 +33,44 @@ def random_contour(x, y):
     return 20 + x ** 2 - 10 * np.cos(2 * np.pi * x) - 10 * np.cos(2 * np.pi * y)  # Rastrigin
 
 
-def random_meshgrid():
+def generate_landscape():
+    """
+    Generates the landscape of the cost fitness.
+
+    Returns:
+        tuple: Coordinates of the landscape with the fitness of each position
+    """
     x = np.linspace(MIN_X, MAX_X, RES)
     y = np.linspace(MIN_Y, MAX_Y, RES)
     X, Y = np.meshgrid(x, y)
-    Z = random_contour(X, Y)
+    Z = get_lanscape_cost(X, Y)
     return X, Y, Z
 
 
 def plot_landscape(X, Y, Z):
+    """
+    Plots the contour of the landscape.
+
+    Args:
+        X (np.array): x-coordinate.
+        Y (np.array): y-coordinate.
+        Z (np.array): Fitness at each location.
+    """
     cs = plt.contour(X, Y, Z)
     plt.clabel(cs, inline=1, fontsize=6)
     plt.imshow(Z, extent=[MIN_X, MAX_X, MIN_Y, MAX_Y], origin="lower", alpha=0.3)
 
 
 def compute_fitness(X_i):
+    """
+    Maps current position to the closest point in the landscape.
+
+    Args:
+        X_i (np.array): x and y coordinates of the fish position.
+
+    Returns:
+        float: Fitness of fish at position X_i.
+    """
     pos_x, pos_y = X_i
     _, j = np.unravel_index((np.abs(X - pos_x)).argmin(), Z.shape)
     i, _ = np.unravel_index((np.abs(Y - pos_y)).argmin(), Z.shape)
@@ -45,6 +78,15 @@ def compute_fitness(X_i):
 
 
 def create_fish(n):
+    """
+    Initializes n fish forming the population.
+
+    Args:
+        n (int): Number of fish in the population.
+
+    Returns:
+        tuple: Contains weights, position and fitness of the fish.
+    """
     W = W_SCALE / 2 * np.ones((N, 1))
     P = np.array([(np.random.uniform(MIN_X, MAX_X), np.random.uniform(MIN_Y, MAX_Y)) for _ in range(n)])
     F = np.expand_dims(np.array([compute_fitness(P[row, :]) for row in range(n)]), axis=1)
@@ -52,11 +94,28 @@ def create_fish(n):
     
 
 def plot_school(W, P):
+    """
+    Plots each fish in the school.
+
+    Args:
+        W (np.array): Weights of the fish.
+        P (np.array): Position of the fish.
+    """
     for idx in range(N):
         plt.plot(P[idx, 0], P[idx, 1], 'r*', markersize=W[idx])
 
 
 def bound_positions(P_new, P_old):
+    """
+    Return fish located outside the landscape back to their previous positions.
+
+    Args:
+        P_new (np.array): Positions after movement.
+        P_old (np.array): Positions before movement.
+
+    Returns:
+        np.array: Array containing updated locaitons.
+    """
     idx_out_x = np.bitwise_or(P_new[:, 0] > MAX_X, P_new[:, 0] < MIN_X)
     idx_out_y = np.bitwise_or(P_new[:, 1] > MAX_Y, P_new[:, 1] < MIN_Y)
     P_new[idx_out_x, :] = P_old[idx_out_x, :]
@@ -65,6 +124,19 @@ def bound_positions(P_new, P_old):
 
 
 def run_fish_school(W, P, F, step_ind, step_vol):
+    """
+    Computes one iteration of the fish school optimizationalgorithm.
+
+    Args:
+        W (np.array): Weights of the fish.
+        P (np.array): Position of the fish.
+        F (np.array): Fitness landscape.
+        step_ind (float): Step size for the individual movement.
+        step_vol (float): Step size for the collective-volitive movement.
+
+    Returns:
+        tuple: Updated values for W, P, and F.
+    """
     # Individual movement
     P_ind = np.zeros(P.shape)
     P_ind = P + step_ind * np.random.uniform(-1, 1, size=(N, 2))
@@ -107,6 +179,7 @@ def run_fish_school(W, P, F, step_ind, step_vol):
 
 
 def main():
+    """ Runs the fish school optimization algorithm."""
     plt.figure(figsize=(8, 5))
     W, P, F = create_fish(N)
     plot_landscape(X, Y, Z)
@@ -134,5 +207,5 @@ def main():
 
 
 if __name__ == "__main__":
-    X, Y, Z = random_meshgrid()
+    X, Y, Z = generate_landscape()
     main()
