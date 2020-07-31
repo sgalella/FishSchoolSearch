@@ -23,7 +23,7 @@ pip install -r requirements.txt
 Run the algorithm from the command line with:
 
 ```python
-python fish_school_search/run.py
+python fish_school_search.py
 ```
 
 
