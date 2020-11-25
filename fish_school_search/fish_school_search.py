@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import optimization_functions as opt
+from visualization import VisualizeSearch
 
 
 class FishSchoolSearch:
@@ -97,35 +98,21 @@ class FishSchoolSearch:
         self.step_ind -= self.step_ind / num_iterations
         self.step_vol -= self.step_vol / num_iterations
 
-    def plot_school(self):
+    def plot(self):
+        self.landscape.plot()
         for idx in range(self.num_individuals):
             plt.plot(self.population[idx, 0], self.population[idx, 1], 'r*', markersize=self.weights[idx])
         plt.title(f"Best fitness: {np.max(self.fitness):.2f}")
 
 
 def main():
-    """ Runs the fish school optimization algorithm."""
     np.random.seed(1234)
     resolution = 100
     limits = [-5, 5, -3, 3]  # x_min, x_max, y_min, y_max
-    num_iterations = 20
     landscape = opt.SphereLandscape(limits, resolution)
-    plt.figure(figsize=(8, 5))
     search = FishSchoolSearch(landscape, num_individuals=10)
-    landscape.plot()
-    search.plot_school()
-    plt.colorbar(shrink=0.75)
-    plt.ion()
-    for _ in range(num_iterations):
-        search.update(num_iterations)
-        plt.cla()
-        landscape.plot()
-        search.plot_school()
-        plt.draw()
-        plt.pause(0.01)
-    plt.ioff()
-    plt.show()
+    VisualizeSearch.show_all(search, num_iterations=20)
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
