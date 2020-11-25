@@ -9,10 +9,10 @@ class FishSchoolSearch:
         self.weight_scale = weight_scale
         self.step_ind = step_ind
         self.step_vol = step_vol
+        self.best_fitness = None
         self.population = self._initialize_population()
         self.weights = self._initialize_weights()
         self.fitness = self._initialize_fitness()
-        self.best_fitness = None
 
     def _initialize_population(self):
         population = np.random.random((self.num_individuals, 2))
@@ -26,7 +26,7 @@ class FishSchoolSearch:
 
     def _initialize_fitness(self):
         fitness = np.expand_dims(np.array([self.landscape.evaluate_fitness(self.population[row, :]) for row in range(self.num_individuals)]), axis=1)
-        self.best_fitness = max(fitness)
+        self.best_fitness = max(fitness)[0]
         return fitness
 
     def _bound_positions(self, pos_new, pos_old):
@@ -44,7 +44,7 @@ class FishSchoolSearch:
 
     def _compute_feeding(self, pos_ind):
         next_fitness = np.expand_dims(np.array([self.landscape.evaluate_fitness(pos_ind[row, :]) for row in range(self.num_individuals)]), axis=1)
-        self.best_fitness = max(next_fitness)
+        self.best_fitness = max(self.best_fitness, max(next_fitness)[0])
         delta_fitness = next_fitness - self.fitness
         pos_ind[(delta_fitness < 0).flatten()] = pos_ind[(delta_fitness < 0).flatten()]
         delta_fitness[delta_fitness < 0] = 0
