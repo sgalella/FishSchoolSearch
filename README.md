@@ -17,13 +17,14 @@ pip install -r requirements.txt
 ```
 
 
-
 ## Usage
 
 Run the algorithm from the command line with:
 
 ```python
-python fish_school_search.py
+python fish_school_search
 ```
+
+To modify any parameter of the simulation, edit `fish_school_search/__main__.py`. For more information regarding the different visualization modes check `notebooks/`.
 
 
