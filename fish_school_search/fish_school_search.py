@@ -1,108 +1,39 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-np.random.seed(1234)
-RES = 100
-
-MIN_X = -5
-MAX_X = 5
-MIN_Y = -3
-MAX_Y = 3
-
-N = 10
-W_SCALE = 10
-
-MAX_ITER = 50
-
-
-def get_lanscape_cost(x, y):
-    """
-    Generates a random landscape.
-
-    Args:
-        x (np.array): Meshgrid for x coordinate.
-        y (np.array): Meshgrid for y coordinate.
-
-    Returns:
-        np.array: Array with costs for each coordinate.
-    """
-    return x ** 2 + y ** 2  # Sphere
-    # return 1 + (x ** 2 / 4000) + (y ** 2 / 4000) - np.cos(x / np.sqrt(2)) - np.cos(y / np.sqrt(2))  # Gricwank
-    # return (x ** 2 + y - 11) ** 2 + (x + y ** 2 - 7) ** 2  # Himmelblau
-    # return -20 * np.exp(-0.2 * np.sqrt(0.5 * (x ** 2 + y ** 2))) - np.exp(0.5 * np.cos(2 * np.pi * x) + np.cos(2 * np.pi * y)) + np.exp(1) + 20   # Ackley
-    # return 20 + x ** 2 - 10 * np.cos(2 * np.pi * x) - 10 * np.cos(2 * np.pi * y)  # Rastrigin
-
-
-def generate_landscape():
-    """
-    Generates the landscape of the cost fitness.
-
-    Returns:
-        tuple: Coordinates of the landscape with the fitness of each position
-    """
-    x = np.linspace(MIN_X, MAX_X, RES)
-    y = np.linspace(MIN_Y, MAX_Y, RES)
-    X, Y = np.meshgrid(x, y)
-    Z = get_lanscape_cost(X, Y)
-    return X, Y, Z
-
-
-def plot_landscape(X, Y, Z):
-    """
-    Plots the contour of the landscape.
-
-    Args:
-        X (np.array): x-coordinate.
-        Y (np.array): y-coordinate.
-        Z (np.array): Fitness at each location.
-    """
-    cs = plt.contour(X, Y, Z)
-    plt.clabel(cs, inline=1, fontsize=6)
-    plt.imshow(Z, extent=[MIN_X, MAX_X, MIN_Y, MAX_Y], origin="lower", alpha=0.3)
-
-
-def compute_fitness(X_i):
-    """
-    Maps current position to the closest point in the landscape.
-
-    Args:
-        X_i (np.array): x and y coordinates of the fish position.
-
-    Returns:
-        float: Fitness of fish at position X_i.
-    """
-    pos_x, pos_y = X_i
-    _, j = np.unravel_index((np.abs(X - pos_x)).argmin(), Z.shape)
-    i, _ = np.unravel_index((np.abs(Y - pos_y)).argmin(), Z.shape)
-    return np.fabs(Z[i, j] - np.max(Z))
+import optimization_functions as opt
 
 
 class FishSchoolSearch:
-    def __init__(self, num_individuals, step_ind=0.5, step_vol=1):
+    def __init__(self, landscape, num_individuals, weight_scale=10, step_ind=0.5, step_vol=1):
+        self.landscape = landscape
+        self.num_individuals = num_individuals
+        self.weight_scale = weight_scale
         self.step_ind = step_ind
         self.step_vol = step_vol
-        self.num_individuals = num_individuals
         self.population = self._initialize_population()
         self.weights = self._initialize_weights()
         self.fitness = self._initialize_fitness()
+        self.best_fitness = None
 
     def _initialize_population(self):
         population = np.random.random((self.num_individuals, 2))
-        population[:, 0] = (MAX_X - MIN_X) * population[:, 0] + MIN_X
-        population[:, 1] = (MAX_Y - MIN_Y) * population[:, 1] + MIN_Y
+        population[:, 0] = (self.landscape.limits[1] - self.landscape.limits[0]) * population[:, 0] + self.landscape.limits[0]
+        population[:, 1] = (self.landscape.limits[3] - self.landscape.limits[2]) * population[:, 1] + self.landscape.limits[2]
         return population
 
     def _initialize_weights(self):
-        weights = W_SCALE / 2 * np.ones((self.num_individuals, 1))
+        weights = self.weight_scale / 2 * np.ones((self.num_individuals, 1))
         return weights
 
     def _initialize_fitness(self):
-        fitness = np.expand_dims(np.array([compute_fitness(self.population[row, :]) for row in range(self.num_individuals)]), axis=1) 
+        fitness = np.expand_dims(np.array([self.landscape.evaluate_fitness(self.population[row, :]) for row in range(self.num_individuals)]), axis=1)
+        self.best_fitness = max(fitness)
         return fitness
 
     def _bound_positions(self, pos_new, pos_old):
-        idx_out_x = np.bitwise_or(pos_new[:, 0] > MAX_X, pos_new[:, 0] < MIN_X)
-        idx_out_y = np.bitwise_or(pos_new[:, 1] > MAX_Y, pos_new[:, 1] < MIN_Y)
+        idx_out_x = np.bitwise_or(pos_new[:, 0] > self.landscape.limits[1], pos_new[:, 0] < self.landscape.limits[0])
+        idx_out_y = np.bitwise_or(pos_new[:, 1] > self.landscape.limits[3], pos_new[:, 1] < self.landscape.limits[2])
         pos_new[idx_out_x, :] = pos_old[idx_out_x, :]
         pos_new[idx_out_y, :] = pos_old[idx_out_y, :]
         return pos_new
@@ -114,12 +45,13 @@ class FishSchoolSearch:
         return pos_ind
 
     def _compute_feeding(self, pos_ind):
-        next_fitness = np.expand_dims(np.array([compute_fitness(pos_ind[row, :]) for row in range(self.num_individuals)]), axis=1)
+        next_fitness = np.expand_dims(np.array([self.landscape.evaluate_fitness(pos_ind[row, :]) for row in range(self.num_individuals)]), axis=1)
+        self.best_fitness = max(next_fitness)
         delta_fitness = next_fitness - self.fitness
         pos_ind[(delta_fitness < 0).flatten()] = pos_ind[(delta_fitness < 0).flatten()]
         delta_fitness[delta_fitness < 0] = 0
         next_weights = self.weights + delta_fitness / np.max(np.fabs(delta_fitness)) if np.max(delta_fitness) != 0 else self.weights
-        next_weights[next_weights > W_SCALE] = W_SCALE
+        next_weights[next_weights > self.weight_scale] = self.weight_scale
         next_weights[next_weights < 1] = 1
         return delta_fitness, next_fitness, next_weights
 
@@ -147,7 +79,7 @@ class FishSchoolSearch:
         pos_next[idx_new, :] = (pos_next[idx_parent1] + pos_next[idx_parent2]) / 2
         return pos_next, next_weights
 
-    def update(self):
+    def update(self, num_iterations):
         # Individual movement
         pos_ind = self._compute_individual_movement()
         # Feeding
@@ -162,8 +94,8 @@ class FishSchoolSearch:
         self.weights = next_weights
         self.population = pos_next
         self.fitness = next_fitness
-        self.step_ind -= self.step_ind / MAX_ITER
-        self.step_vol -= self.step_vol / MAX_ITER
+        self.step_ind -= self.step_ind / num_iterations
+        self.step_vol -= self.step_vol / num_iterations
 
     def plot_school(self):
         for idx in range(self.num_individuals):
@@ -173,16 +105,21 @@ class FishSchoolSearch:
 
 def main():
     """ Runs the fish school optimization algorithm."""
+    np.random.seed(1234)
+    resolution = 100
+    limits = [-5, 5, -3, 3]  # x_min, x_max, y_min, y_max
+    num_iterations = 20
+    landscape = opt.SphereLandscape(limits, resolution)
     plt.figure(figsize=(8, 5))
-    search = FishSchoolSearch(N)
-    plot_landscape(X, Y, Z)
+    search = FishSchoolSearch(landscape, num_individuals=10)
+    landscape.plot()
     search.plot_school()
     plt.colorbar(shrink=0.75)
     plt.ion()
-    for _ in range(MAX_ITER):
-        search.update()
+    for _ in range(num_iterations):
+        search.update(num_iterations)
         plt.cla()
-        plot_landscape(X, Y, Z)
+        landscape.plot()
         search.plot_school()
         plt.draw()
         plt.pause(0.01)
@@ -191,5 +128,4 @@ def main():
 
 
 if __name__ == "__main__":
-    X, Y, Z = generate_landscape()
     main()
