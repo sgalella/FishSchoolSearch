@@ -26,11 +26,11 @@ def get_lanscape_cost(x, y):
     Returns:
         np.array: Array with costs for each coordinate.
     """
-    # return x ** 2 + y ** 2  # Sphere
+    return x ** 2 + y ** 2  # Sphere
     # return 1 + (x ** 2 / 4000) + (y ** 2 / 4000) - np.cos(x / np.sqrt(2)) - np.cos(y / np.sqrt(2))  # Gricwank
     # return (x ** 2 + y - 11) ** 2 + (x + y ** 2 - 7) ** 2  # Himmelblau
     # return -20 * np.exp(-0.2 * np.sqrt(0.5 * (x ** 2 + y ** 2))) - np.exp(0.5 * np.cos(2 * np.pi * x) + np.cos(2 * np.pi * y)) + np.exp(1) + 20   # Ackley
-    return 20 + x ** 2 - 10 * np.cos(2 * np.pi * x) - 10 * np.cos(2 * np.pi * y)  # Rastrigin
+    # return 20 + x ** 2 - 10 * np.cos(2 * np.pi * x) - 10 * np.cos(2 * np.pi * y)  # Rastrigin
 
 
 def generate_landscape():
@@ -77,131 +77,115 @@ def compute_fitness(X_i):
     return np.fabs(Z[i, j] - np.max(Z))
 
 
-def create_fish(n):
-    """
-    Initializes n fish forming the population.
+class FishSchoolSearch:
+    def __init__(self, num_individuals, step_ind=0.5, step_vol=1):
+        self.step_ind = step_ind
+        self.step_vol = step_vol
+        self.num_individuals = num_individuals
+        self.population = self._initialize_population()
+        self.weights = self._initialize_weights()
+        self.fitness = self._initialize_fitness()
 
-    Args:
-        n (int): Number of fish in the population.
+    def _initialize_population(self):
+        population = np.random.random((self.num_individuals, 2))
+        population[:, 0] = (MAX_X - MIN_X) * population[:, 0] + MIN_X
+        population[:, 1] = (MAX_Y - MIN_Y) * population[:, 1] + MIN_Y
+        return population
 
-    Returns:
-        tuple: Contains weights, position and fitness of the fish.
-    """
-    W = W_SCALE / 2 * np.ones((N, 1))
-    P = np.array([(np.random.uniform(MIN_X, MAX_X), np.random.uniform(MIN_Y, MAX_Y)) for _ in range(n)])
-    F = np.expand_dims(np.array([compute_fitness(P[row, :]) for row in range(n)]), axis=1)
-    return W, P, F
-    
+    def _initialize_weights(self):
+        weights = W_SCALE / 2 * np.ones((self.num_individuals, 1))
+        return weights
 
-def plot_school(W, P):
-    """
-    Plots each fish in the school.
+    def _initialize_fitness(self):
+        fitness = np.expand_dims(np.array([compute_fitness(self.population[row, :]) for row in range(self.num_individuals)]), axis=1) 
+        return fitness
 
-    Args:
-        W (np.array): Weights of the fish.
-        P (np.array): Position of the fish.
-    """
-    for idx in range(N):
-        plt.plot(P[idx, 0], P[idx, 1], 'r*', markersize=W[idx])
+    def _bound_positions(self, pos_new, pos_old):
+        idx_out_x = np.bitwise_or(pos_new[:, 0] > MAX_X, pos_new[:, 0] < MIN_X)
+        idx_out_y = np.bitwise_or(pos_new[:, 1] > MAX_Y, pos_new[:, 1] < MIN_Y)
+        pos_new[idx_out_x, :] = pos_old[idx_out_x, :]
+        pos_new[idx_out_y, :] = pos_old[idx_out_y, :]
+        return pos_new
 
+    def _compute_individual_movement(self):
+        pos_ind = np.zeros(self.population.shape)
+        pos_ind = self.population + self.step_ind * np.random.uniform(-1, 1, size=(self.num_individuals, 2))
+        pos_ind = self._bound_positions(pos_ind, self.population)
+        return pos_ind
 
-def bound_positions(P_new, P_old):
-    """
-    Return fish located outside the landscape back to their previous positions.
+    def _compute_feeding(self, pos_ind):
+        next_fitness = np.expand_dims(np.array([compute_fitness(pos_ind[row, :]) for row in range(self.num_individuals)]), axis=1)
+        delta_fitness = next_fitness - self.fitness
+        pos_ind[(delta_fitness < 0).flatten()] = pos_ind[(delta_fitness < 0).flatten()]
+        delta_fitness[delta_fitness < 0] = 0
+        next_weights = self.weights + delta_fitness / np.max(np.fabs(delta_fitness)) if np.max(delta_fitness) != 0 else self.weights
+        next_weights[next_weights > W_SCALE] = W_SCALE
+        next_weights[next_weights < 1] = 1
+        return delta_fitness, next_fitness, next_weights
 
-    Args:
-        P_new (np.array): Positions after movement.
-        P_old (np.array): Positions before movement.
+    def _compute_instintive_movement(self, pos_ind, delta_fitness):
+        pos_ins = np.zeros(self.population.shape)
+        pos_ins = pos_ind + np.tile(np.sum((pos_ind - self.population) * np.tile(delta_fitness, 2), axis=0) / np.sum(delta_fitness), (self.num_individuals, 1)) \
+            if np.sum(delta_fitness) != 0 else pos_ind
+        pos_ins = self._bound_positions(pos_ins, pos_ind)
+        pos_ins = self._bound_positions(pos_ins, pos_ind)
+        return pos_ins
 
-    Returns:
-        np.array: Array containing updated locaitons.
-    """
-    idx_out_x = np.bitwise_or(P_new[:, 0] > MAX_X, P_new[:, 0] < MIN_X)
-    idx_out_y = np.bitwise_or(P_new[:, 1] > MAX_Y, P_new[:, 1] < MIN_Y)
-    P_new[idx_out_x, :] = P_old[idx_out_x, :]
-    P_new[idx_out_y, :] = P_old[idx_out_y, :]
-    return P_new
+    def _compute_volitive_movement(self, pos_ins, next_weights):
+        bar = np.tile(np.sum(pos_ins * np.tile(next_weights, 2), axis=0) / np.sum(next_weights, axis=0), (self.num_individuals, 1))
+        if np.mean(next_weights) >= np.mean(self.weights):
+            pos_next = pos_ins - np.multiply(self.step_vol * np.random.uniform(0, 1, size=(self.num_individuals, 2)), (pos_ins - bar))
+        else:
+            pos_next = pos_ins + np.multiply(self.step_vol * np.random.uniform(0, 1, size=(self.num_individuals, 1)), (pos_ins - bar))
+        pos_next = self._bound_positions(pos_next, pos_ins)
+        return pos_next
 
+    def _breed_population(self, pos_next, next_weights):
+        idx_new = np.argmin(next_weights)
+        idx_parent1, idx_parent2 = next_weights.flatten().argsort()[::-1][:2]
+        next_weights[idx_new] = (next_weights[idx_parent1] + next_weights[idx_parent2]) / 2
+        pos_next[idx_new, :] = (pos_next[idx_parent1] + pos_next[idx_parent2]) / 2
+        return pos_next, next_weights
 
-def run_fish_school(W, P, F, step_ind, step_vol):
-    """
-    Computes one iteration of the fish school optimizationalgorithm.
+    def update(self):
+        # Individual movement
+        pos_ind = self._compute_individual_movement()
+        # Feeding
+        delta_fitness, next_fitness, next_weights = self._compute_feeding(pos_ind)
+        # Collective-instinctive movement
+        pos_ins = self._compute_instintive_movement(pos_ind, delta_fitness)
+        # Collective-volitive movement
+        pos_next_parents = self._compute_volitive_movement(pos_ins, next_weights)
+        # Breeding
+        pos_next, next_weights = self._breed_population(pos_next_parents, next_weights)
+        # Update values
+        self.weights = next_weights
+        self.population = pos_next
+        self.fitness = next_fitness
+        self.step_ind -= self.step_ind / MAX_ITER
+        self.step_vol -= self.step_vol / MAX_ITER
 
-    Args:
-        W (np.array): Weights of the fish.
-        P (np.array): Position of the fish.
-        F (np.array): Fitness landscape.
-        step_ind (float): Step size for the individual movement.
-        step_vol (float): Step size for the collective-volitive movement.
-
-    Returns:
-        tuple: Updated values for W, P, and F.
-    """
-    # Individual movement
-    P_ind = np.zeros(P.shape)
-    P_ind = P + step_ind * np.random.uniform(-1, 1, size=(N, 2))
-    P_ind = bound_positions(P_ind, P)
-
-    # Feeding
-    F_next = np.expand_dims(np.array([compute_fitness(P_ind[row, :]) for row in range(N)]), axis=1)
-    delta_F = F_next - F
-    P_ind[(delta_F < 0).flatten()] = P[(delta_F < 0).flatten()]  # Don't move if new position decreases fitness
-    delta_F[delta_F < 0] = 0
-    W_next = W + delta_F / np.max(np.fabs(delta_F)) if np.max(delta_F) != 0 else W
-    W_next[W_next > W_SCALE] = W_SCALE
-    W_next[W_next < 1] = 1
-
-    # Collective-instinctive movement
-    P_ins = np.zeros(P.shape)
-    P_ins = P_ind + np.tile(np.sum((P_ind - P) * np.tile(delta_F, 2), axis=0) / np.sum(delta_F), (N, 1)) if np.sum(delta_F) != 0 else P_ind
-    P_ins = bound_positions(P_ins, P_ind)
-
-    # Collective-volitive movement
-    Bar = np.tile(np.sum(P_ins * np.tile(W_next, 2), axis=0) / np.sum(W_next, axis=0), (N, 1))
-    if np.mean(W_next) >= np.mean(W):
-        P_next = P_ins - np.multiply(step_vol * np.random.uniform(0, 1, size=(N, 2)), (P_ins - Bar))
-    else:
-        P_next = P_ins + np.multiply(step_vol * np.random.uniform(0, 1, size=(N, 1)), (P_ins - Bar))
-    P_next = bound_positions(P_next, P_ins)
-
-    # Breeding
-    idx_new = np.argmin(W_next)
-    idx_parent1, idx_parent2 = W_next.flatten().argsort()[::-1][:2]
-    W_next[idx_new] = (W_next[idx_parent1] + W_next[idx_parent2]) / 2
-    P_next[idx_new, :] = (P_next[idx_parent1] + P_next[idx_parent2]) / 2
-
-    # Update values
-    W = W_next
-    P = P_next
-    F = F_next
-
-    return W, P, F
+    def plot_school(self):
+        for idx in range(self.num_individuals):
+            plt.plot(self.population[idx, 0], self.population[idx, 1], 'r*', markersize=self.weights[idx])
+        plt.title(f"Best fitness: {np.max(self.fitness):.2f}")
 
 
 def main():
     """ Runs the fish school optimization algorithm."""
     plt.figure(figsize=(8, 5))
-    W, P, F = create_fish(N)
+    search = FishSchoolSearch(N)
     plot_landscape(X, Y, Z)
-    plot_school(W, P)
+    search.plot_school()
     plt.colorbar(shrink=0.75)
-    plt.title(f"Total fitness: {np.sum(F)}")
     plt.ion()
-    iteration = 1
-    step_ind = 0.5
-    step_vol = 0.1
     for _ in range(MAX_ITER):
-        W, P, F = run_fish_school(W, P, F, step_ind, step_vol)
-        step_ind -= step_ind / MAX_ITER
-        step_vol -= step_vol / MAX_ITER
-        # Update plot
+        search.update()
         plt.cla()
         plot_landscape(X, Y, Z)
-        plot_school(W, P)
-        plt.title(f"Total fitness: {np.sum(F):.2f}")
+        search.plot_school()
         plt.draw()
         plt.pause(0.01)
-        iteration += 1
     plt.ioff()
     plt.show()
 
