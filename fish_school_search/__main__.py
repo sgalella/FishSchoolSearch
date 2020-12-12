@@ -1,8 +1,8 @@
 import numpy as np
 
-import optimization_functions as opt
-from fish_school_search import FishSchoolSearch
-from visualization import VisualizeSearch
+from . import optimization_functions as opt
+from .fish_school_search import FishSchoolSearch
+from .visualization import VisualizeSearch
 
 
 np.random.seed(1234)
