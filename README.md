@@ -1,5 +1,5 @@
 # Fish School Search
-Implementation of the fish school optimization algorithm proposed in [_A novel algorithm based on fish school behavior_](https://ieeexplore.ieee.org/document/4811695). 
+Implementation of the [fish school search (FSS)](https://en.wikipedia.org/wiki/Fish_School_Search) proposed in the paper [**A novel algorithm based on fish school behavior**](https://ieeexplore.ieee.org/document/4811695). 
 
 > _"An unimodal optimization algorithm inspired in the collective behavior of fish schools. Fishes swim toward the positive gradient in order to eat and gain weight. The heavier fishes are more influent in the search process, making the school move to better places in the search space"_ — From [Wikipedia](https://en.wikipedia.org/wiki/Fish_School_Search)
 
